@@ -14,7 +14,7 @@ In order to achieve this goal, I will first have a clear explore of the dataset,
 My research questions are:
 •	help this bank to predict whether their clients will subscribe the long-term deposit.
 •	Compare decision tree and naïve bayes prediction methods
-•	Find out if booster dataset will affect results
+•	Find out if feature selection will affect results
 •	Find out if dataset need to be balanced and if balance the dataset will affect results
 ####
 
