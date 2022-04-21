@@ -1,0 +1,389 @@
+---
+title: 'CMTH820 Big Data Analytic Program'
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+<center> <h1> Results and the Code </h1> </center>
+<center>  <h3> [Peiran Liu] </h2> </center>
+<center> <h3> [CMTH820] </h2> </center>
+---
+
+
+
+####Abstract of the Project
+The theme I would like to work on is classification and regression with non-textural dataset. The reason I choose this theme is that I would like to become an data scientist in business area. Classification and regression are the most common tools to use to analyse data, so I want to practice the knowledge and techniques I learned in this program in the real world’s cases.
+
+After reviewing all the datasets, I choose the Bank Marketing Dataset in  UC Irvine Machine Learning Repository. The UC Irvine Machine Learning Repository dataset provide  service to machine learning users and contain over 600 datasets. I choose this datasets because it come from real world and it contains variables which can be applied to machine learning techniques. 
+The Portugal banking institution collect the data from their clints with direct marketing campaigns (phone calls). The dataset contains 4521 observers and 17 variables( from May 2008 to November 2010 ), it may contains missing values and replicate data which needed to be cleaned. The variables describe the clients’ socioeconomic status (e.g. martial, job, education, loan, housing), as well as their previous telemarketing campaigns (e.g. contact, campaign, previous, duration) . The independent variable is binary( “yes”, “no” ) data about if the client subscribed a term deposit.
+The bank is marketing a long-term deposit account such as bonds and saving account to their existing clients. They intend to improve their telemarketing strategies and to predict the clients who will subscribe more long-term deposit by analysing the dataset they provided.  
+
+My study question is help a bank to predict weather their clients will subscribe the long-term deposit. . By using the dataset which collected by the bank, my project can help the bank to determine such customers and finding an effective telemarketing strategy. This research can improve the efficiency of their marketing department and reduce their expenses. Our research can also help the bank to figure out which existing clients they should advertise a long-term deposit account such as bonds and saving account. 
+
+In order to achieve this goal, I will first have a clear explore of the dataset,  clean the dataset which we can use for analysing it. Then I will choose those important attributes which I can use in the predictive model. Finally, I will develop two prediction models, including decision tree and Naïve Bayes and find the models’ accuracy and precision to judge if I successfully developed the prediction models.
+
+
+
+
+
+My research questions are:
+•	help this bank to predict whether their clients will subscribe the long-term deposit.
+•	Compare decision tree and naïve bayes prediction methods
+•	Find out if feature selection will affect results
+•	Find out if dataset need to be balanced and if balance the dataset will affect results
+####
+
+
+### install all the package needed.
+```{r}
+library(class)
+library(gmodels)
+install.packages("caret")
+install.packages("ggplot2")
+library(caret)
+
+```
+
+#### 1. Read the csv files in the folder. 
+```{r}
+
+data_bank<-read.csv(file = "CIND820/bank.csv" )
+data_bank<-data.frame(data_bank)
+```
+
+
+#### 2. Basic factors about the data
+```{r}
+head(data_bank)
+str(data_bank)
+summary(data_bank)
+```
+
+#### 3.Check the missing value
+```{r}
+sum(is.na(data_bank))
+```
+#### From here, we can see that there is no missing value.
+
+#### 4. Graph of the dataset.
+```{r}
+boxplot(data_bank$balance)
+boxplot(data_bank$duration)
+boxplot(data_bank$campaign)
+boxplot(data_bank$pdays)
+boxplot(data_bank$previous)
+
+###histogram of all numeric attributs
+library(ggplot2)
+
+hist(data_bank$age)
+hist(data_bank$balance)
+hist(data_bank$duration)
+hist(data_bank$campaign)
+hist(data_bank$pdays)
+hist(data_bank$previous)
+
+
+
+```
+
+
+#### 5.check the correlation of the dataset
+```{r}
+library(corrplot)
+my_num_data <- data_bank[, sapply(data_bank, is.numeric)]
+cor(my_num_data)
+corrplot(cor(my_num_data))
+
+```
+
+#### 6. Apply normallization to the dataset. Using Min-Max Normalization on all the numeric attributes.
+```{r}
+library(dplyr)
+normalize<-function(x){
+ return( (x-min(x, na.rm=TRUE)) / (max(x, na.rm=TRUE)-min(x, na.rm=TRUE)))
+}
+
+norm_bank<-data_bank %>%
+   mutate_if(is.numeric, normalize)
+str(norm_bank)
+```
+###7. Visualize the numeric data after normalize.
+```{r}
+hist(norm_bank$age)
+hist(norm_bank$balance)
+hist(norm_bank$duration)
+hist(norm_bank$campaign)
+hist(norm_bank$pdays)
+hist(norm_bank$previous)
+```
+###8.balancing the data according to y.
+```{r}
+barplot(prop.table(table(norm_bank$y)),col = rainbow(2),main = "y distributor")
+
+norm_bank$y <- as.factor(norm_bank$y)
+summary(norm_bank)
+
+table(norm_bank$y)
+
+#oversampling balance
+library(ROSE) 
+balance_bank <- ovun.sample(y~., data = norm_bank, method = "over", N = 8000)$data
+table(balance_bank$y)
+summary(balance_bank)
+
+barplot(prop.table(table(balance_bank$y)),col= rainbow(2),main="after over sampling balancing")
+
+```
+
+###9. According to correlation, I choose the below features as new dataset:duration, month, day, poutcome, pday, age, contact, previous and y.
+
+```{r}
+selected_bank<-data.frame(balance_bank$duration,balance_bank$month,balance_bank$day,balance_bank$poutcome,balance_bank$pdays,balance_bank$age,balance_bank$contact,balance_bank$previous,balance_bank$y)
+
+
+str(selected_bank)
+summary(selected_bank)
+```
+###10.decision tree classification on all attributes before balancing.
+```{r}
+norm_bank <- as.data.frame(unclass(norm_bank),stringsAsFactors=TRUE)
+start.time <- Sys.time()
+#data partition
+set.seed(123)
+pd <- sample(2, nrow(norm_bank), replace = TRUE, prob = c(0.8, 0.2))
+train0 <- norm_bank[pd==1,]
+test0 <- norm_bank[pd==2,]
+#decision tree with party
+library(party)
+tree1<-ctree(y~.,data=train0)
+plot(tree1)
+
+#missclassification error with train data
+predict(tree1,train0)
+tab0<-table(predict(tree1), train0$y)
+
+#prediction of missclassification error with test data
+testprep<-predict(tree1,test0)
+tab1<-table(testprep, test0$y)
+
+print(tab0)
+print(tab1)
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+```
+###11. random forest classification on all attributes before balancing
+
+```{r}
+#data partition
+start.time <- Sys.time()
+set.seed(123)
+ind <- sample(2, nrow(norm_bank), replace = TRUE, prob = c(0.8, 0.2))
+train1 <- norm_bank[ind==1,]
+test1 <- norm_bank[ind==2,]
+
+library(randomForest)
+set.seed(222)
+rf1<-randomForest(y~., data=train1)
+print(rf1)
+p1<-predict(rf1,test1)
+confusionMatrix(p1,test1$y)
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+```
+###12.naive bayes classification on all attributes before balancing.
+```{r}
+library(naivebayes)
+library(dplyr)
+library(ggplot2)
+library(psych)
+start.time <- Sys.time()
+norm_bank <- as.data.frame(unclass(norm_bank),stringsAsFactors=TRUE)
+#data partition
+set.seed(1234)
+ind2 <- sample(2, nrow(norm_bank), replace = TRUE, prob = c(0.8, 0.2))
+train2 <- norm_bank[ind2==1,]
+test2 <- norm_bank[ind2==2,]
+
+#naive bayes model
+model<-naive_bayes(y~.,data=train2)
+model
+#confusion matrix on train data
+p<- predict(model,train2, type = 'prob')
+p1<-predict(model,train2)
+tab12<-table(p1,train2$y)
+print(tab12)
+#confusion matrix on test data
+p2<- predict(model,test2, type = 'prob')
+p3<-predict(model,test2)
+tab13<-table(p3,test2$y)
+print(tab13)
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+```
+###13.decision tree classification on all attributes after balancing.
+```{r}
+balance_bank <- as.data.frame(unclass(balance_bank),stringsAsFactors=TRUE)
+start.time <- Sys.time()
+#data partition
+set.seed(123)
+pd <- sample(2, nrow(balance_bank), replace = TRUE, prob = c(0.8, 0.2))
+train3 <- balance_bank[pd==1,]
+test3 <- balance_bank[pd==2,]
+#decision tree with party
+library(party)
+tree2<-ctree(y~.,data=train3)
+plot(tree2)
+
+#missclassification error with train data
+predict(tree2,train3)
+tab2<-table(predict(tree2), train3$y)
+
+#prediction of missclassification error with test data
+testprep2<-predict(tree2,test3)
+tab3<-table(testprep2, test3$y)
+
+print(tab2)
+print(tab3)
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+```
+###14. random forest classification on all attributes after balancing
+
+```{r}
+#data parition
+start.time <- Sys.time()
+set.seed(123)
+ind4 <- sample(2, nrow(balance_bank), replace = TRUE, prob = c(0.8, 0.2))
+train4 <- balance_bank[ind4==1,]
+test4 <- balance_bank[ind4==2,]
+#prediction modeling
+library(randomForest)
+set.seed(222)
+rf4<-randomForest(y~., data=train4)
+print(rf4)
+p4<-predict(rf4,test4)
+confusionMatrix(p4,test4$y)
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+```
+###15.naive bayes classification on all attributes after balancing.
+```{r}
+balance_bank <- as.data.frame(unclass(balance_bank),stringsAsFactors=TRUE)
+start.time <- Sys.time()
+#data partition
+set.seed(1234)
+ind5 <- sample(2, nrow(balance_bank), replace = TRUE, prob = c(0.8, 0.2))
+train5 <- balance_bank[ind5==1,]
+test5 <- balance_bank[ind5==2,]
+
+#naive bayes model
+model<-naive_bayes(y~.,data=train5)
+model
+#confusion matrix on train data
+p5<- predict(model,train5, type = 'prob')
+p6<-predict(model,train5)
+tab15<-table(p6,train5$y)
+print(tab15)
+#confusion matrix on test data
+p7<- predict(model,test5, type = 'prob')
+p8<-predict(model,test5)
+tab16<-table(p8,test5$y)
+print(tab16)
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+```
+###16.decision tree classification on selected attributes after balancing.
+```{r}
+selected_bank <- as.data.frame(unclass(selected_bank),stringsAsFactors=TRUE)
+start.time <- Sys.time()
+#data partition
+set.seed(123)
+pd <- sample(2, nrow(selected_bank), replace = TRUE, prob = c(0.8, 0.2))
+train6 <- selected_bank[pd==1,]
+test6 <- selected_bank[pd==2,]
+#decision tree with party
+library(party)
+tree3<-ctree(selected_bank$balance_bank.y~.,data=train6)
+plot(tree3)
+
+#missclassification error with train data
+testprep8<-predict(tree3,train6)
+tab4<-table(testprep8, train6$balance_bank.y) 
+
+#prediction of missclassification error with test data
+testprep3<-predict(tree3,test6)
+tab5<-table(testprep3, test6$balance_bank.y)
+
+print(tab4)
+print(tab5)
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+```
+###17. random forest classification on selected attributes after balancing
+
+```{r}
+start.time <- Sys.time()
+#data partition
+set.seed(123)
+ind7 <- sample(2, nrow(selected_bank), replace = TRUE, prob = c(0.8, 0.2))
+train7 <- selected_bank[ind7==1,]
+test7 <- selected_bank[ind7==2,]
+#prediction modeling
+library(randomForest)
+set.seed(222)
+rf7<-randomForest(balance_bank.y~., data=train7)
+print(rf7)
+p7<-predict(rf7,test7)
+confusionMatrix(p7,test7$balance_bank.y)
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+```
+###18.naive bayes classification on selected attributes after balancing.
+```{r}
+selected_bank <- as.data.frame(unclass(selected_bank),stringsAsFactors=TRUE)
+start.time <- Sys.time()
+#data partition
+set.seed(1234)
+ind8 <- sample(2, nrow(selected_bank), replace = TRUE, prob = c(0.8, 0.2))
+train8 <- selected_bank[ind8==1,]
+test8 <- selected_bank[ind8==2,]
+
+#naive bayes model
+model<-naive_bayes(balance_bank.y~.,data=train8)
+model
+#confusion matrix on train data
+p9<- predict(model,train8, type = 'prob')
+p10<-predict(model,train8)
+tab17<-table(p10,train8$balance_bank.y)
+print(tab17)
+#confusion matrix on test data
+p11<- predict(model,test8, type = 'prob')
+p12<-predict(model,test8)
+tab18<-table(p12,test8$balance_bank.y)
+print(tab18)
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+```
+### 19. Decision tree with 10 fold for all attributes before balancing
+```{r}
+#data partition
+set.seed(123)
+
+```
+
+
+
+This is the end
+
+Peiran Liu
